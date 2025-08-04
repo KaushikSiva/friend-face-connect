@@ -115,6 +115,11 @@ export const VideoChatSFU = () => {
     if (!currentRoomId) {
       currentRoomId = generateRoomId();
     }
+    
+    // CRITICAL DEBUG: Log the exact room ID being used
+    console.log(`🚨🚨🚨 [CRITICAL] PERSON STARTING CALL IS USING ROOM ID: "${currentRoomId}" 🚨🚨🚨`);
+    alert(`STARTING CALL WITH ROOM ID: ${currentRoomId}`);
+    
     console.log(`🎬 [START-UI] Starting call with room ID: ${currentRoomId}, input: ${roomIdInput}`);
     console.log(`🎬 [START-UI] Current state - isConnected: ${isConnected}, roomId: ${roomId}`);
     console.log(`🎬 [START-UI] About to call connectToSFU with: ${currentRoomId}`);
@@ -141,6 +146,11 @@ export const VideoChatSFU = () => {
       });
       return;
     }
+    
+    // CRITICAL DEBUG: Log the exact room ID being used
+    console.log(`🚨🚨🚨 [CRITICAL] PERSON JOINING CALL IS USING ROOM ID: "${roomIdInput}" 🚨🚨🚨`);
+    alert(`JOINING CALL WITH ROOM ID: ${roomIdInput}`);
+    
     console.log(`🚪 [JOIN] Attempting to join room: ${roomIdInput}`);
     console.log(`🚪 [JOIN] Current state - isConnected: ${isConnected}, roomId: ${roomId}, participants: ${participants.length}`);
 
