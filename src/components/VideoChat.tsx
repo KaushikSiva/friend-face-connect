@@ -177,9 +177,9 @@ export const VideoChat = () => {
     return pc;
   };
 
-  // Start call - simplified approach
+  // Start call as initiator
   const startCall = async () => {
-    console.log('Starting call...');
+    console.log('Starting call as initiator...');
     
     let currentRoomId = roomId;
     if (!currentRoomId) {
@@ -187,18 +187,120 @@ export const VideoChat = () => {
     }
 
     const stream = await initializeMedia();
-    if (!stream) {
-      console.log('Failed to get media stream');
-      return;
-    }
+    if (!stream) return;
 
-    console.log('Media stream ready, setting connected state');
+    setIsInitiating(true);
     setIsConnected(true);
+
+    // Create peer connection
+    const pc = createPeerConnection();
+    peerConnectionRef.current = pc;
+
+    // Add local stream to peer connection
+    stream.getTracks().forEach(track => {
+      pc.addTrack(track, stream);
+    });
+
+    // Create and set offer
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    // Store offer for the other peer
+    localStorage.setItem(`offer-${currentRoomId}`, JSON.stringify(offer));
+    console.log('Offer created and stored for room:', currentRoomId);
+
+    // Start checking for answer
+    startSignalingCheck(currentRoomId);
     
     toast({
       title: "Call started!",
-      description: "Your video is ready. Share room ID: " + currentRoomId,
+      description: "Share room ID: " + currentRoomId + " with your friend",
     });
+  };
+
+  // Join existing call
+  const joinCall = async () => {
+    if (!roomId) {
+      toast({
+        variant: "destructive",
+        title: "No room ID",
+        description: "Please enter a room ID to join",
+      });
+      return;
+    }
+
+    console.log('Joining call in room:', roomId);
+
+    const stream = await initializeMedia();
+    if (!stream) return;
+
+    setIsConnected(true);
+
+    // Create peer connection
+    const pc = createPeerConnection();
+    peerConnectionRef.current = pc;
+
+    // Add local stream
+    stream.getTracks().forEach(track => {
+      pc.addTrack(track, stream);
+    });
+
+    // Get stored offer
+    const storedOffer = localStorage.getItem(`offer-${roomId}`);
+    if (!storedOffer) {
+      toast({
+        variant: "destructive",
+        title: "Room not found",
+        description: "No active call found in room " + roomId,
+      });
+      setIsConnected(false);
+      return;
+    }
+
+    // Set remote description and create answer
+    await pc.setRemoteDescription(JSON.parse(storedOffer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    // Store answer
+    localStorage.setItem(`answer-${roomId}`, JSON.stringify(answer));
+    console.log('Answer created and stored for room:', roomId);
+
+    // Start signaling check
+    startSignalingCheck(roomId);
+
+    toast({
+      title: "Joined call!",
+      description: "Connected to room " + roomId,
+    });
+  };
+
+  // Signaling check function
+  const startSignalingCheck = (currentRoomId: string) => {
+    const checkSignaling = () => {
+      if (!peerConnectionRef.current) return;
+
+      // Check for answer (if initiator)
+      if (isInitiating) {
+        const answer = localStorage.getItem(`answer-${currentRoomId}`);
+        if (answer) {
+          peerConnectionRef.current.setRemoteDescription(JSON.parse(answer));
+          console.log('Answer received and set');
+        }
+      }
+
+      // Check for ICE candidates
+      const remoteCandidates = localStorage.getItem(`ice-${currentRoomId}-${isInitiating ? 'joiner' : 'initiator'}`);
+      if (remoteCandidates) {
+        JSON.parse(remoteCandidates).forEach((candidate: RTCIceCandidate) => {
+          peerConnectionRef.current?.addIceCandidate(candidate);
+        });
+        localStorage.removeItem(`ice-${currentRoomId}-${isInitiating ? 'joiner' : 'initiator'}`);
+      }
+    };
+
+    // Check every 2 seconds
+    (window as any).signalingInterval = setInterval(checkSignaling, 2000);
   };
 
   // Test function to just show local video
@@ -314,23 +416,24 @@ export const VideoChat = () => {
               </Button>
 
               <Button
-                onClick={testLocalVideo}
+                onClick={startCall}
                 variant="default"
                 size="lg"
                 className="w-full"
               >
-                <Video className="h-5 w-5" />
-                Test Local Video
+                <PhoneCall className="h-5 w-5" />
+                Start New Call
               </Button>
 
               <Button
-                onClick={startCall}
+                onClick={joinCall}
                 variant="outline"
                 size="lg"
                 className="w-full"
+                disabled={!roomId}
               >
-                <PhoneCall className="h-5 w-5" />
-                Start Video Call
+                <Video className="h-5 w-5" />
+                Join Call
               </Button>
             </div>
 
