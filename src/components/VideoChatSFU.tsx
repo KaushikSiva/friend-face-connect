@@ -85,7 +85,7 @@ export const VideoChatSFU = () => {
   const generateRoomId = () => {
     const id = Math.random().toString(36).substring(2, 8).toUpperCase();
     setRoomIdInput(id);
-    setRoomId(id);
+    // Don't set roomId here - let the server confirm it after joining
     return id;
   };
 
