@@ -211,7 +211,7 @@ export const useSFUConnection = () => {
           case 'existing-participants':
             console.log(`👥 [EXISTING] Found ${message.participants.length} existing participants:`, message.participants);
             setParticipants(message.participants);
-            // Create peer connections for existing participants
+            // As the new joiner, we create offers to all existing participants
             for (const participant of message.participants) {
               console.log(`📤 [OFFER-CREATE] Creating offer for existing participant ${participant.id}`);
               await createOfferForParticipant(participant.id, currentStreamRef.current);
@@ -221,9 +221,9 @@ export const useSFUConnection = () => {
           case 'participant-joined':
             console.log(`🆕 [NEW-PARTICIPANT] New participant joined: ${message.participantId}`);
             setParticipants(prev => [...prev, { id: message.participantId, name: message.name }]);
-            // Create offer for new participant
-            console.log(`📤 [OFFER-CREATE] Creating offer for new participant ${message.participantId}`);
-            await createOfferForParticipant(message.participantId, currentStreamRef.current);
+            // Don't create offer here - the new participant will create offers to existing participants
+            // We just wait for their offer
+            console.log(`⏳ [WAIT] Waiting for offer from new participant ${message.participantId}`);
             toast({
               title: "Participant joined",
               description: message.name || `User ${message.participantId.slice(0, 4)} joined the call`,
