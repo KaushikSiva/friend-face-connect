@@ -155,8 +155,14 @@ export const useSFUConnection = () => {
       };
 
       ws.onmessage = async (event) => {
-        const message = JSON.parse(event.data);
-        console.log(`📨 [SFU] Received message:`, message.type, message);
+        let message: any;
+        try {
+          message = JSON.parse(event.data);
+          console.log(`📨 [SFU] Received message:`, message.type, message);
+        } catch (error) {
+          console.error(`❌ [SFU] Error parsing message:`, error, event.data);
+          return;
+        }
 
         switch (message.type) {
           case 'joined-room':
@@ -231,8 +237,8 @@ export const useSFUConnection = () => {
         }
       };
 
-      ws.onclose = () => {
-        console.log('🔌 [SFU] WebSocket disconnected');
+      ws.onclose = (event) => {
+        console.log(`🔌 [SFU] WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`);
         setIsConnected(false);
       };
 
@@ -248,6 +254,11 @@ export const useSFUConnection = () => {
       return true;
     } catch (error) {
       console.error('❌ [SFU] Connection failed:', error);
+      toast({
+        variant: "destructive",
+        title: "Connection Failed",
+        description: "Could not establish connection to video server.",
+      });
       return false;
     }
   }, [toast]);
