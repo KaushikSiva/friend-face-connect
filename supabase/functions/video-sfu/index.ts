@@ -117,6 +117,8 @@ function handleJoinRoom(socket: WebSocket, message: any) {
   const { roomId, participantId, name } = message;
   
   console.log(`🏠 [ROOM] Participant ${participantId} joining room ${roomId}`);
+  console.log(`🔍 [DEBUG] Current rooms in memory:`, Array.from(rooms.keys()));
+  console.log(`🔍 [DEBUG] Total participants across all rooms:`, participants.size);
 
   // Create room if it doesn't exist
   if (!rooms.has(roomId)) {
@@ -126,9 +128,13 @@ function handleJoinRoom(socket: WebSocket, message: any) {
       createdAt: new Date()
     });
     console.log(`🆕 [ROOM] Created new room: ${roomId}`);
+  } else {
+    console.log(`🏠 [ROOM] Room ${roomId} already exists with ${rooms.get(roomId)?.participants.size} participants`);
   }
 
   const room = rooms.get(roomId)!;
+  
+  console.log(`📊 [DEBUG] Room ${roomId} participants before adding new one:`, Array.from(room.participants.keys()));
   
   // Create participant
   const participant: Participant = {
@@ -141,6 +147,9 @@ function handleJoinRoom(socket: WebSocket, message: any) {
   // Add participant to room and global map
   room.participants.set(participantId, participant);
   participants.set(socket, participant);
+  
+  console.log(`📊 [DEBUG] Room ${roomId} participants after adding new one:`, Array.from(room.participants.keys()));
+  console.log(`📊 [DEBUG] Room ${roomId} now has ${room.participants.size} participants`);
 
   // Notify participant of successful join
   sendMessage(socket, {
@@ -151,6 +160,9 @@ function handleJoinRoom(socket: WebSocket, message: any) {
   });
 
   // Notify existing participants about new join
+  const otherParticipants = Array.from(room.participants.values()).filter(p => p.id !== participantId);
+  console.log(`📢 [BROADCAST] Notifying ${otherParticipants.length} existing participants about new join`);
+  
   broadcastToRoom(roomId, {
     type: 'participant-joined',
     participantId,
@@ -164,10 +176,13 @@ function handleJoinRoom(socket: WebSocket, message: any) {
     .map(p => ({ id: p.id, name: p.name }));
 
   if (existingParticipants.length > 0) {
+    console.log(`📋 [EXISTING] Sending ${existingParticipants.length} existing participants to ${participantId}:`, existingParticipants.map(p => p.id));
     sendMessage(socket, {
       type: 'existing-participants',
       participants: existingParticipants
     });
+  } else {
+    console.log(`📋 [EXISTING] No existing participants to send to ${participantId}`);
   }
 
   console.log(`✅ [ROOM] Participant ${participantId} successfully joined room ${roomId}. Total participants: ${room.participants.size}`);
