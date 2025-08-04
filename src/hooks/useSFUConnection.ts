@@ -66,12 +66,20 @@ export const useSFUConnection = () => {
     };
 
     pc.ontrack = (event) => {
-      console.log(`🎥 [TRACK] Received remote stream from ${participantId}`);
+      console.log(`🎥 [TRACK] Received remote stream from ${participantId}`, event);
       const stream = event.streams[0];
+      
+      if (!stream) {
+        console.error(`❌ [TRACK] No stream in track event from ${participantId}`);
+        return;
+      }
+      
+      console.log(`📺 [TRACK] Stream has ${stream.getTracks().length} tracks:`, stream.getTracks().map(t => `${t.kind}:${t.enabled}`));
       
       setRemoteStreams(prev => {
         const existing = prev.find(s => s.participantId === participantId);
         if (existing) {
+          console.log(`🔄 [TRACK] Updating existing stream for ${participantId}`);
           return prev.map(s => 
             s.participantId === participantId 
               ? { ...s, stream }
@@ -79,6 +87,7 @@ export const useSFUConnection = () => {
           );
         }
         
+        console.log(`➕ [TRACK] Adding new stream for ${participantId}`);
         return [...prev, { participantId, stream, name: undefined }];
       });
     };
