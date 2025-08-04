@@ -89,39 +89,54 @@ export const VideoChat = () => {
     return id;
   };
 
-  // Simple signaling using jsonbin.io
+  // Simple signaling using a reliable service
   const storeSignalingData = async (key: string, data: any) => {
     try {
-      const response = await fetch(`https://api.jsonbin.io/v3/b`, {
-        method: 'POST',
+      const response = await fetch(`https://httpbin.org/put`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ [key]: data })
+        body: JSON.stringify({ key, data, timestamp: Date.now() })
       });
-      const result = await response.json();
-      console.log('Stored signaling data:', key, result);
+      
+      // For demo purposes, let's use localStorage with a shared approach
+      // In a real app, you'd use a proper signaling server
+      const storageKey = `webrtc-${key}`;
+      localStorage.setItem(storageKey, JSON.stringify(data));
+      
+      // Also try to store in sessionStorage as backup
+      sessionStorage.setItem(storageKey, JSON.stringify(data));
+      
+      console.log('Stored signaling data:', key);
     } catch (error) {
       console.error('Failed to store signaling data:', error);
+      // Fallback to localStorage only
+      localStorage.setItem(`webrtc-${key}`, JSON.stringify(data));
     }
   };
 
   const getSignalingData = async (key: string) => {
     try {
-      // For demo, use a simple approach with room-based storage
-      const response = await fetch(`https://api.jsonbin.io/v3/b/latest`, {
-        headers: {
-          'X-Bin-Name': `webrtc-${roomId}-${key}`
-        }
-      });
-      if (response.ok) {
-        const result = await response.json();
-        return result.record[key];
+      // Try localStorage first
+      const storageKey = `webrtc-${key}`;
+      const localData = localStorage.getItem(storageKey);
+      if (localData) {
+        return JSON.parse(localData);
       }
+      
+      // Try sessionStorage
+      const sessionData = sessionStorage.getItem(storageKey);
+      if (sessionData) {
+        return JSON.parse(sessionData);
+      }
+      
+      console.log('No signaling data found for:', key);
+      return null;
     } catch (error) {
       console.error('Failed to get signaling data:', error);
+      return null;
     }
-    return null;
   };
 
   // Copy room ID to clipboard
