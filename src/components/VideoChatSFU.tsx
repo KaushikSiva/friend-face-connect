@@ -199,7 +199,7 @@ export const VideoChatSFU = () => {
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Enter room ID to join existing call"
+                    placeholder="Enter any room ID (e.g., MEETING123)"
                     value={roomIdInput}
                     onChange={(e) => setRoomIdInput(e.target.value.toUpperCase())}
                     className="font-mono"
@@ -267,10 +267,10 @@ export const VideoChatSFU = () => {
 
               <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
                 <strong>How to use:</strong><br/>
-                1. Generate a room ID OR enter an existing one<br/>
-                2. Click "Start Call" to create a new room<br/>
+                1. Type any custom room ID (e.g., "MEETING123") OR click "Generate"<br/>
+                2. Click "Start Call" to create the room with that ID<br/>
                 3. Share the Room ID with others<br/>
-                4. Others should enter the SAME Room ID and click "Join Room"
+                4. Others enter the SAME Room ID and click "Join Room"
               </div>
             </div>
           </div>
