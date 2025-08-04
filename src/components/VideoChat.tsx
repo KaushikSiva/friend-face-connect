@@ -135,6 +135,7 @@ export const VideoChat = () => {
 
   // Subscribe to signaling changes
   const subscribeToSignaling = (roomId: string, callback: (type: string, data: any) => void) => {
+    console.log('Setting up real-time subscription for room:', roomId);
     const subscription = supabase
       .channel(`signaling-${roomId}`)
       .on('postgres_changes', 
@@ -145,11 +146,13 @@ export const VideoChat = () => {
           filter: `room_id=eq.${roomId}`
         }, 
         (payload) => {
-          console.log('Received signaling data:', payload.new);
+          console.log('Received real-time signaling data:', payload.new);
           callback(payload.new.type, payload.new.data);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+      });
     
     return subscription;
   };
@@ -271,8 +274,16 @@ export const VideoChat = () => {
     await storeSignalingData(currentRoomId, 'offer', offer);
     console.log('Offer created and stored for room:', currentRoomId);
 
-    // Start checking for answer
-    startSignalingCheck(currentRoomId);
+    // Set up real-time subscription for signaling
+    const subscription = subscribeToSignaling(currentRoomId, async (type, data) => {
+      if (type === 'answer' && peerConnectionRef.current) {
+        await peerConnectionRef.current.setRemoteDescription(data as unknown as RTCSessionDescriptionInit);
+        console.log('Answer received via real-time');
+      } else if (type === 'ice_candidate' && peerConnectionRef.current) {
+        await peerConnectionRef.current.addIceCandidate(data as unknown as RTCIceCandidateInit);
+        console.log('ICE candidate received via real-time');
+      }
+    });
     
     toast({
       title: "Call started!",
@@ -328,8 +339,13 @@ export const VideoChat = () => {
     await storeSignalingData(roomId, 'answer', answer);
     console.log('Answer created and stored for room:', roomId);
 
-    // Start signaling check
-    startSignalingCheck(roomId);
+    // Set up real-time subscription for ICE candidates
+    const subscription = subscribeToSignaling(roomId, async (type, data) => {
+      if (type === 'ice_candidate' && peerConnectionRef.current) {
+        await peerConnectionRef.current.addIceCandidate(data as unknown as RTCIceCandidateInit);
+        console.log('ICE candidate received via real-time');
+      }
+    });
 
     toast({
       title: "Joined call!",
