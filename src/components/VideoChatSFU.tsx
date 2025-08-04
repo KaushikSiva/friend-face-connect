@@ -115,18 +115,19 @@ export const VideoChatSFU = () => {
     if (!currentRoomId) {
       currentRoomId = generateRoomId();
     }
-    console.log(`🎬 [START] Starting call with room ID: ${currentRoomId}, input: ${roomIdInput}`);
-    console.log(`🎬 [START] Current state - isConnected: ${isConnected}, roomId: ${roomId}`);
+    console.log(`🎬 [START-UI] Starting call with room ID: ${currentRoomId}, input: ${roomIdInput}`);
+    console.log(`🎬 [START-UI] Current state - isConnected: ${isConnected}, roomId: ${roomId}`);
+    console.log(`🎬 [START-UI] About to call connectToSFU with: ${currentRoomId}`);
 
     const success = await connectToSFU(currentRoomId, userName || undefined);
-    console.log(`🎬 [START] Connect result: ${success}`);
+    console.log(`🎬 [START-UI] Connect result: ${success}`);
     if (success) {
       toast({
         title: "Call started!",
         description: `Room ID: ${currentRoomId}. Share with others to join.`,
       });
     } else {
-      console.error(`❌ [START] Failed to start call`);
+      console.error(`❌ [START-UI] Failed to start call`);
     }
   };
 

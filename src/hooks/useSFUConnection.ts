@@ -21,7 +21,7 @@ export const useSFUConnection = () => {
   
   const wsRef = useRef<WebSocket | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const participantIdRef = useRef<string>(Math.random().toString(36).substring(2, 10));
+  const participantIdRef = useRef<string>(`user-${Math.random().toString(36).substring(2, 10)}`);
   
   const { toast } = useToast();
 
