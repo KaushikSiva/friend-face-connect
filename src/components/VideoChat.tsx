@@ -136,6 +136,28 @@ export const VideoChat = () => {
     }
   };
 
+  // Get ALL ICE candidates for a room
+  const getAllIceCandidates = async (roomId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('signaling')
+        .select('data')
+        .eq('room_id', roomId)
+        .eq('type', 'ice_candidate')
+        .order('created_at', { ascending: true });
+      
+      if (error) {
+        console.error('Error getting ICE candidates:', error);
+        return [];
+      }
+      
+      return data?.map(item => item.data) || [];
+    } catch (error) {
+      console.error('Failed to get ICE candidates:', error);
+      return [];
+    }
+  };
+
   // Subscribe to signaling changes
   const subscribeToSignaling = (roomId: string, callback: (type: string, data: any) => void) => {
     console.log('Setting up real-time subscription for room:', roomId);
@@ -302,6 +324,20 @@ export const VideoChat = () => {
       if (type === 'answer' && peerConnectionRef.current) {
         await peerConnectionRef.current.setRemoteDescription(data as unknown as RTCSessionDescriptionInit);
         console.log('Answer received via real-time');
+        
+        // After setting remote description, get all existing ICE candidates from joiner
+        const existingCandidates = await getAllIceCandidates(currentRoomId);
+        const joinersCandidate = existingCandidates.filter((_, index) => index > 0); // Skip initiator's candidates
+        console.log(`Found ${joinersCandidate.length} joiner ICE candidates`);
+        
+        for (const candidate of joinersCandidate) {
+          try {
+            await peerConnectionRef.current.addIceCandidate(candidate as unknown as RTCIceCandidateInit);
+            console.log('Added joiner ICE candidate');
+          } catch (error) {
+            console.error('Error adding joiner ICE candidate:', error);
+          }
+        }
       } else if (type === 'ice_candidate' && peerConnectionRef.current) {
         await peerConnectionRef.current.addIceCandidate(data as unknown as RTCIceCandidateInit);
         console.log('ICE candidate received via real-time');
@@ -364,7 +400,20 @@ export const VideoChat = () => {
     await storeSignalingData(roomId, 'answer', answer);
     console.log('Answer created and stored for room:', roomId);
 
-    // Set up real-time subscription for ICE candidates
+    // Get and add all existing ICE candidates from the initiator
+    const existingCandidates = await getAllIceCandidates(roomId);
+    console.log(`Found ${existingCandidates.length} existing ICE candidates`);
+    
+    for (const candidate of existingCandidates) {
+      try {
+        await pc.addIceCandidate(candidate as unknown as RTCIceCandidateInit);
+        console.log('Added existing ICE candidate');
+      } catch (error) {
+        console.error('Error adding existing ICE candidate:', error);
+      }
+    }
+
+    // Set up real-time subscription for new ICE candidates
     const subscription = subscribeToSignaling(roomId, async (type, data) => {
       if (type === 'ice_candidate' && peerConnectionRef.current) {
         await peerConnectionRef.current.addIceCandidate(data as unknown as RTCIceCandidateInit);
