@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Mic, MicOff, Video, VideoOff, Phone, PhoneCall, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
 
 interface VideoControlsProps {
   isAudioEnabled: boolean;
@@ -89,54 +90,68 @@ export const VideoChat = () => {
     return id;
   };
 
-  // Simple signaling using a reliable service
-  const storeSignalingData = async (key: string, data: any) => {
+  // Supabase signaling functions
+  const storeSignalingData = async (roomId: string, type: string, data: any) => {
     try {
-      const response = await fetch(`https://httpbin.org/put`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ key, data, timestamp: Date.now() })
-      });
+      const { error } = await supabase
+        .from('signaling')
+        .insert({
+          room_id: roomId,
+          type: type,
+          data: data
+        });
       
-      // For demo purposes, let's use localStorage with a shared approach
-      // In a real app, you'd use a proper signaling server
-      const storageKey = `webrtc-${key}`;
-      localStorage.setItem(storageKey, JSON.stringify(data));
-      
-      // Also try to store in sessionStorage as backup
-      sessionStorage.setItem(storageKey, JSON.stringify(data));
-      
-      console.log('Stored signaling data:', key);
+      if (error) {
+        console.error('Error storing signaling data:', error);
+      } else {
+        console.log('Stored signaling data:', type, 'for room:', roomId);
+      }
     } catch (error) {
       console.error('Failed to store signaling data:', error);
-      // Fallback to localStorage only
-      localStorage.setItem(`webrtc-${key}`, JSON.stringify(data));
     }
   };
 
-  const getSignalingData = async (key: string) => {
+  const getSignalingData = async (roomId: string, type: string) => {
     try {
-      // Try localStorage first
-      const storageKey = `webrtc-${key}`;
-      const localData = localStorage.getItem(storageKey);
-      if (localData) {
-        return JSON.parse(localData);
+      const { data, error } = await supabase
+        .from('signaling')
+        .select('data')
+        .eq('room_id', roomId)
+        .eq('type', type)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (error) {
+        console.error('Error getting signaling data:', error);
+        return null;
       }
       
-      // Try sessionStorage
-      const sessionData = sessionStorage.getItem(storageKey);
-      if (sessionData) {
-        return JSON.parse(sessionData);
-      }
-      
-      console.log('No signaling data found for:', key);
-      return null;
+      return data?.[0]?.data || null;
     } catch (error) {
       console.error('Failed to get signaling data:', error);
       return null;
     }
+  };
+
+  // Subscribe to signaling changes
+  const subscribeToSignaling = (roomId: string, callback: (type: string, data: any) => void) => {
+    const subscription = supabase
+      .channel(`signaling-${roomId}`)
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'signaling',
+          filter: `room_id=eq.${roomId}`
+        }, 
+        (payload) => {
+          console.log('Received signaling data:', payload.new);
+          callback(payload.new.type, payload.new.data);
+        }
+      )
+      .subscribe();
+    
+    return subscription;
   };
 
   // Copy room ID to clipboard
@@ -199,8 +214,7 @@ export const VideoChat = () => {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        // Store ICE candidate in a public service instead of localStorage
-        storeSignalingData(`ice-${roomId}-${isInitiating ? 'initiator' : 'joiner'}`, event.candidate);
+        storeSignalingData(roomId, 'ice_candidate', event.candidate);
       }
     };
 
@@ -253,8 +267,8 @@ export const VideoChat = () => {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // Store offer for the other peer using online service
-    await storeSignalingData(`offer-${currentRoomId}`, offer);
+    // Store offer for the other peer using Supabase
+    await storeSignalingData(currentRoomId, 'offer', offer);
     console.log('Offer created and stored for room:', currentRoomId);
 
     // Start checking for answer
@@ -293,8 +307,8 @@ export const VideoChat = () => {
       pc.addTrack(track, stream);
     });
 
-    // Get stored offer from online service
-    const storedOffer = await getSignalingData(`offer-${roomId}`);
+    // Get stored offer from Supabase
+    const storedOffer = await getSignalingData(roomId, 'offer');
     if (!storedOffer) {
       toast({
         variant: "destructive",
@@ -310,8 +324,8 @@ export const VideoChat = () => {
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
-    // Store answer using online service
-    await storeSignalingData(`answer-${roomId}`, answer);
+    // Store answer using Supabase
+    await storeSignalingData(roomId, 'answer', answer);
     console.log('Answer created and stored for room:', roomId);
 
     // Start signaling check
@@ -330,7 +344,7 @@ export const VideoChat = () => {
 
       // Check for answer (if initiator)
       if (isInitiating) {
-        const answer = await getSignalingData(`answer-${currentRoomId}`);
+        const answer = await getSignalingData(currentRoomId, 'answer');
         if (answer) {
           peerConnectionRef.current.setRemoteDescription(answer);
           console.log('Answer received and set');
@@ -338,7 +352,7 @@ export const VideoChat = () => {
       }
 
       // Check for ICE candidates
-      const remoteCandidates = await getSignalingData(`ice-${currentRoomId}-${isInitiating ? 'joiner' : 'initiator'}`);
+      const remoteCandidates = await getSignalingData(currentRoomId, 'ice_candidate');
       if (remoteCandidates) {
         peerConnectionRef.current?.addIceCandidate(remoteCandidates);
       }
