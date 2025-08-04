@@ -89,6 +89,41 @@ export const VideoChat = () => {
     return id;
   };
 
+  // Simple signaling using jsonbin.io
+  const storeSignalingData = async (key: string, data: any) => {
+    try {
+      const response = await fetch(`https://api.jsonbin.io/v3/b`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ [key]: data })
+      });
+      const result = await response.json();
+      console.log('Stored signaling data:', key, result);
+    } catch (error) {
+      console.error('Failed to store signaling data:', error);
+    }
+  };
+
+  const getSignalingData = async (key: string) => {
+    try {
+      // For demo, use a simple approach with room-based storage
+      const response = await fetch(`https://api.jsonbin.io/v3/b/latest`, {
+        headers: {
+          'X-Bin-Name': `webrtc-${roomId}-${key}`
+        }
+      });
+      if (response.ok) {
+        const result = await response.json();
+        return result.record[key];
+      }
+    } catch (error) {
+      console.error('Failed to get signaling data:', error);
+    }
+    return null;
+  };
+
   // Copy room ID to clipboard
   const copyRoomId = async () => {
     try {
@@ -149,10 +184,8 @@ export const VideoChat = () => {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        // Store ICE candidate in localStorage for simple signaling
-        const candidates = JSON.parse(localStorage.getItem(`ice-${roomId}-${isInitiating ? 'initiator' : 'joiner'}`) || '[]');
-        candidates.push(event.candidate);
-        localStorage.setItem(`ice-${roomId}-${isInitiating ? 'initiator' : 'joiner'}`, JSON.stringify(candidates));
+        // Store ICE candidate in a public service instead of localStorage
+        storeSignalingData(`ice-${roomId}-${isInitiating ? 'initiator' : 'joiner'}`, event.candidate);
       }
     };
 
@@ -205,8 +238,8 @@ export const VideoChat = () => {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // Store offer for the other peer
-    localStorage.setItem(`offer-${currentRoomId}`, JSON.stringify(offer));
+    // Store offer for the other peer using online service
+    await storeSignalingData(`offer-${currentRoomId}`, offer);
     console.log('Offer created and stored for room:', currentRoomId);
 
     // Start checking for answer
@@ -245,8 +278,8 @@ export const VideoChat = () => {
       pc.addTrack(track, stream);
     });
 
-    // Get stored offer
-    const storedOffer = localStorage.getItem(`offer-${roomId}`);
+    // Get stored offer from online service
+    const storedOffer = await getSignalingData(`offer-${roomId}`);
     if (!storedOffer) {
       toast({
         variant: "destructive",
@@ -258,12 +291,12 @@ export const VideoChat = () => {
     }
 
     // Set remote description and create answer
-    await pc.setRemoteDescription(JSON.parse(storedOffer));
+    await pc.setRemoteDescription(storedOffer);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
-    // Store answer
-    localStorage.setItem(`answer-${roomId}`, JSON.stringify(answer));
+    // Store answer using online service
+    await storeSignalingData(`answer-${roomId}`, answer);
     console.log('Answer created and stored for room:', roomId);
 
     // Start signaling check
@@ -277,30 +310,27 @@ export const VideoChat = () => {
 
   // Signaling check function
   const startSignalingCheck = (currentRoomId: string) => {
-    const checkSignaling = () => {
+    const checkSignaling = async () => {
       if (!peerConnectionRef.current) return;
 
       // Check for answer (if initiator)
       if (isInitiating) {
-        const answer = localStorage.getItem(`answer-${currentRoomId}`);
+        const answer = await getSignalingData(`answer-${currentRoomId}`);
         if (answer) {
-          peerConnectionRef.current.setRemoteDescription(JSON.parse(answer));
+          peerConnectionRef.current.setRemoteDescription(answer);
           console.log('Answer received and set');
         }
       }
 
       // Check for ICE candidates
-      const remoteCandidates = localStorage.getItem(`ice-${currentRoomId}-${isInitiating ? 'joiner' : 'initiator'}`);
+      const remoteCandidates = await getSignalingData(`ice-${currentRoomId}-${isInitiating ? 'joiner' : 'initiator'}`);
       if (remoteCandidates) {
-        JSON.parse(remoteCandidates).forEach((candidate: RTCIceCandidate) => {
-          peerConnectionRef.current?.addIceCandidate(candidate);
-        });
-        localStorage.removeItem(`ice-${currentRoomId}-${isInitiating ? 'joiner' : 'initiator'}`);
+        peerConnectionRef.current?.addIceCandidate(remoteCandidates);
       }
     };
 
-    // Check every 2 seconds
-    (window as any).signalingInterval = setInterval(checkSignaling, 2000);
+    // Check every 3 seconds
+    (window as any).signalingInterval = setInterval(checkSignaling, 3000);
   };
 
   // Test function to just show local video
