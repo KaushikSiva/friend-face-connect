@@ -196,55 +196,82 @@ export const VideoChatSFU = () => {
                 onChange={(e) => setUserName(e.target.value)}
               />
               
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Enter or generate room ID"
-                  value={roomIdInput}
-                  onChange={(e) => setRoomIdInput(e.target.value.toUpperCase())}
-                  className="font-mono"
-                />
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter room ID to join existing call"
+                    value={roomIdInput}
+                    onChange={(e) => setRoomIdInput(e.target.value.toUpperCase())}
+                    className="font-mono"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={copyRoomId}
+                    disabled={!roomIdInput && !roomId}
+                    title="Copy room ID"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                {roomIdInput && (
+                  <div className="p-3 bg-muted rounded-lg border">
+                    <p className="text-sm font-medium text-center">
+                      Room ID: <span className="font-mono text-primary">{roomIdInput}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground text-center mt-1">
+                      Share this exact ID with others to join the same room
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
                 <Button
+                  onClick={generateRoomId}
                   variant="outline"
-                  size="icon"
-                  onClick={copyRoomId}
-                  disabled={!roomIdInput && !roomId}
+                  className="w-full"
                 >
-                  <Copy className="h-4 w-4" />
+                  Generate New Room ID
+                </Button>
+                
+                <div className="text-xs text-muted-foreground text-center">
+                  Creates a random ID for a new call
+                </div>
+              </div>
+
+              <div className="border-t pt-4 space-y-2">
+                <Button
+                  onClick={startCall}
+                  variant="default"
+                  size="lg"
+                  className="w-full"
+                  disabled={!roomIdInput}
+                >
+                  <PhoneCall className="h-5 w-5" />
+                  {roomIdInput ? `Start Call (${roomIdInput})` : 'Generate Room ID First'}
+                </Button>
+
+                <Button
+                  onClick={joinCall}
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  disabled={!roomIdInput}
+                >
+                  <Video className="h-5 w-5" />
+                  {roomIdInput ? `Join Room ${roomIdInput}` : 'Enter Room ID First'}
                 </Button>
               </div>
 
-              <Button
-                onClick={generateRoomId}
-                variant="outline"
-                className="w-full"
-              >
-                Generate New Room ID
-              </Button>
-
-              <Button
-                onClick={startCall}
-                variant="default"
-                size="lg"
-                className="w-full"
-              >
-                <PhoneCall className="h-5 w-5" />
-                Start New Call
-              </Button>
-
-              <Button
-                onClick={joinCall}
-                variant="outline"
-                size="lg"
-                className="w-full"
-                disabled={!roomIdInput}
-              >
-                <Video className="h-5 w-5" />
-                Join Call
-              </Button>
-            </div>
-
-            <div className="text-xs text-muted-foreground">
-              Share your room ID with others to connect
+              <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                <strong>How to use:</strong><br/>
+                1. Generate a room ID OR enter an existing one<br/>
+                2. Click "Start Call" to create a new room<br/>
+                3. Share the Room ID with others<br/>
+                4. Others should enter the SAME Room ID and click "Join Room"
+              </div>
             </div>
           </div>
         </Card>
