@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Mic, MicOff, Video, VideoOff, Phone, PhoneCall, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 
 interface VideoControlsProps {
   isAudioEnabled: boolean;
@@ -320,7 +320,7 @@ export const VideoChat = () => {
     }
 
     // Set remote description and create answer
-    await pc.setRemoteDescription(storedOffer);
+    await pc.setRemoteDescription(storedOffer as unknown as RTCSessionDescriptionInit);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
@@ -346,7 +346,7 @@ export const VideoChat = () => {
       if (isInitiating) {
         const answer = await getSignalingData(currentRoomId, 'answer');
         if (answer) {
-          peerConnectionRef.current.setRemoteDescription(answer);
+          peerConnectionRef.current.setRemoteDescription(answer as unknown as RTCSessionDescriptionInit);
           console.log('Answer received and set');
         }
       }
@@ -354,7 +354,7 @@ export const VideoChat = () => {
       // Check for ICE candidates
       const remoteCandidates = await getSignalingData(currentRoomId, 'ice_candidate');
       if (remoteCandidates) {
-        peerConnectionRef.current?.addIceCandidate(remoteCandidates);
+        peerConnectionRef.current?.addIceCandidate(remoteCandidates as unknown as RTCIceCandidateInit);
       }
     };
 
