@@ -266,6 +266,7 @@ export const useSupabaseVideoChat = () => {
           
           const allParticipants = Object.keys(state).map(key => {
             const presenceData = state[key][0] as any; // Presence data structure
+            console.log(`📋 [PRESENCE] Participant ${key} has presence data:`, presenceData);
             return {
               id: key,
               name: presenceData?.name
@@ -273,6 +274,8 @@ export const useSupabaseVideoChat = () => {
           });
           
           const otherParticipants = allParticipants.filter(p => p.id !== participantIdRef.current);
+          console.log(`👥 [PRESENCE] All participants:`, allParticipants);
+          console.log(`👥 [PRESENCE] Other participants:`, otherParticipants);
           setParticipants(otherParticipants);
           console.log(`👥 [PRESENCE] Found ${otherParticipants.length} other participants:`, otherParticipants.map(p => p.id));
         })
@@ -341,6 +344,8 @@ export const useSupabaseVideoChat = () => {
           });
           
           console.log(`📍 [PRESENCE] Track status:`, presenceTrackStatus);
+          console.log(`📍 [PRESENCE] Tracking with name: "${name || `User ${participantIdRef.current.slice(0, 4)}`}"`);
+          
           
           setIsConnected(true);
           setRoomId(targetRoomId);
