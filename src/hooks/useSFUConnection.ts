@@ -91,19 +91,26 @@ export const useSFUConnection = () => {
     return pc;
   };
 
-  const createOfferForParticipant = async (participantId: string) => {
+  const createOfferForParticipant = async (participantId: string, stream?: MediaStream) => {
+    const currentStream = stream || localStream;
+    console.log(`🔗 [OFFER] Creating offer for participant ${participantId}, stream available: ${!!currentStream}`);
     const pc = createPeerConnection(participantId);
     
     // Add local stream to peer connection
-    if (localStream) {
-      localStream.getTracks().forEach(track => {
-        pc.addTrack(track, localStream);
+    if (currentStream) {
+      console.log(`📺 [STREAM] Adding ${currentStream.getTracks().length} tracks to peer connection`);
+      currentStream.getTracks().forEach(track => {
+        console.log(`🎬 [TRACK] Adding track: ${track.kind}, enabled: ${track.enabled}`);
+        pc.addTrack(track, currentStream);
       });
+    } else {
+      console.warn(`⚠️ [STREAM] No stream available when creating offer for ${participantId}`);
     }
     
     // Create and send offer
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    console.log(`📤 [OFFER] Sending offer to ${participantId}`);
     
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
@@ -122,6 +129,9 @@ export const useSFUConnection = () => {
       const stream = await initializeMedia();
       if (!stream) return false;
 
+      // Store current stream reference for use in message handlers
+      const currentStreamRef = { current: stream };
+
       // Connect to SFU WebSocket
       const ws = new WebSocket(`wss://pbxormchfloeaqrkhbvz.functions.supabase.co/video-sfu`);
       wsRef.current = ws;
@@ -137,9 +147,81 @@ export const useSFUConnection = () => {
         }));
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = async (event) => {
         const message = JSON.parse(event.data);
-        handleSFUMessage(message);
+        console.log(`📨 [SFU] Received message:`, message.type, message);
+
+        switch (message.type) {
+          case 'joined-room':
+            console.log(`✅ [JOIN] Successfully joined room ${message.roomId}`);
+            setIsConnected(true);
+            setRoomId(message.roomId);
+            toast({
+              title: "Connected!",
+              description: `Joined room ${message.roomId}`,
+            });
+            break;
+
+          case 'existing-participants':
+            console.log(`👥 [EXISTING] Found ${message.participants.length} existing participants:`, message.participants);
+            setParticipants(message.participants);
+            // Create peer connections for existing participants
+            for (const participant of message.participants) {
+              console.log(`📤 [OFFER-CREATE] Creating offer for existing participant ${participant.id}`);
+              await createOfferForParticipant(participant.id, currentStreamRef.current);
+            }
+            break;
+
+          case 'participant-joined':
+            console.log(`🆕 [NEW-PARTICIPANT] New participant joined: ${message.participantId}`);
+            setParticipants(prev => [...prev, { id: message.participantId, name: message.name }]);
+            // Create offer for new participant
+            console.log(`📤 [OFFER-CREATE] Creating offer for new participant ${message.participantId}`);
+            await createOfferForParticipant(message.participantId, currentStreamRef.current);
+            toast({
+              title: "Participant joined",
+              description: message.name || `User ${message.participantId.slice(0, 4)} joined the call`,
+            });
+            break;
+
+          case 'participant-left':
+            // Remove participant and clean up peer connection
+            const pc = peerConnectionsRef.current.get(message.participantId);
+            if (pc) {
+              pc.close();
+              peerConnectionsRef.current.delete(message.participantId);
+            }
+            
+            setParticipants(prev => prev.filter(p => p.id !== message.participantId));
+            setRemoteStreams(prev => prev.filter(s => s.participantId !== message.participantId));
+            
+            toast({
+              title: "Participant left",
+              description: `User left the call`,
+            });
+            break;
+
+          case 'offer':
+            await handleOffer(message.fromParticipantId, message.offer, currentStreamRef.current);
+            break;
+
+          case 'answer':
+            await handleAnswer(message.fromParticipantId, message.answer);
+            break;
+
+          case 'ice-candidate':
+            await handleIceCandidate(message.fromParticipantId, message.candidate);
+            break;
+
+          case 'error':
+            console.error('❌ [SFU] Server error:', message.error);
+            toast({
+              variant: "destructive",
+              title: "Server Error",
+              description: message.error,
+            });
+            break;
+        }
       };
 
       ws.onclose = () => {
@@ -161,88 +243,20 @@ export const useSFUConnection = () => {
       console.error('❌ [SFU] Connection failed:', error);
       return false;
     }
-  }, [localStream, participants, toast]);
+  }, [toast]);
 
-  const handleSFUMessage = async (message: any) => {
-    console.log(`📨 [SFU] Received message:`, message.type);
 
-    switch (message.type) {
-      case 'joined-room':
-        setIsConnected(true);
-        setRoomId(message.roomId);
-        toast({
-          title: "Connected!",
-          description: `Joined room ${message.roomId}`,
-        });
-        break;
-
-      case 'existing-participants':
-        setParticipants(message.participants);
-        // Create peer connections for existing participants
-        for (const participant of message.participants) {
-          await createOfferForParticipant(participant.id);
-        }
-        break;
-
-      case 'participant-joined':
-        setParticipants(prev => [...prev, { id: message.participantId, name: message.name }]);
-        // Create offer for new participant
-        await createOfferForParticipant(message.participantId);
-        toast({
-          title: "Participant joined",
-          description: message.name || `User ${message.participantId.slice(0, 4)} joined the call`,
-        });
-        break;
-
-      case 'participant-left':
-        // Remove participant and clean up peer connection
-        const pc = peerConnectionsRef.current.get(message.participantId);
-        if (pc) {
-          pc.close();
-          peerConnectionsRef.current.delete(message.participantId);
-        }
-        
-        setParticipants(prev => prev.filter(p => p.id !== message.participantId));
-        setRemoteStreams(prev => prev.filter(s => s.participantId !== message.participantId));
-        
-        toast({
-          title: "Participant left",
-          description: `User left the call`,
-        });
-        break;
-
-      case 'offer':
-        await handleOffer(message.fromParticipantId, message.offer);
-        break;
-
-      case 'answer':
-        await handleAnswer(message.fromParticipantId, message.answer);
-        break;
-
-      case 'ice-candidate':
-        await handleIceCandidate(message.fromParticipantId, message.candidate);
-        break;
-
-      case 'error':
-        console.error('❌ [SFU] Server error:', message.error);
-        toast({
-          variant: "destructive",
-          title: "Server Error",
-          description: message.error,
-        });
-        break;
-    }
-  };
-
-  const handleOffer = async (fromParticipantId: string, offer: RTCSessionDescriptionInit) => {
+  const handleOffer = async (fromParticipantId: string, offer: RTCSessionDescriptionInit, stream?: MediaStream) => {
     console.log(`📥 [OFFER] Received offer from ${fromParticipantId}`);
     
     const pc = createPeerConnection(fromParticipantId);
+    const currentStream = stream || localStream;
     
     // Add local stream to peer connection
-    if (localStream) {
-      localStream.getTracks().forEach(track => {
-        pc.addTrack(track, localStream);
+    if (currentStream) {
+      console.log(`📺 [OFFER-STREAM] Adding ${currentStream.getTracks().length} tracks to peer connection`);
+      currentStream.getTracks().forEach(track => {
+        pc.addTrack(track, currentStream);
       });
     }
     
