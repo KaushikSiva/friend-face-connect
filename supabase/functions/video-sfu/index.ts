@@ -18,9 +18,17 @@ interface Room {
   createdAt: Date;
 }
 
-// Global state management
-const rooms = new Map<string, Room>();
-const participants = new Map<WebSocket, Participant>();
+// Global state management - using globalThis to ensure state persistence across invocations
+if (!globalThis.videoSFUState) {
+  globalThis.videoSFUState = {
+    rooms: new Map<string, Room>(),
+    participants: new Map<WebSocket, Participant>()
+  };
+  console.log("🎥 [SFU] Initialized global state");
+}
+
+const rooms = globalThis.videoSFUState.rooms;
+const participants = globalThis.videoSFUState.participants;
 
 // Cleanup inactive rooms every 5 minutes
 setInterval(() => {
