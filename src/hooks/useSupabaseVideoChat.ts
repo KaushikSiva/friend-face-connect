@@ -106,8 +106,9 @@ export const useSupabaseVideoChat = () => {
     return pc;
   };
 
-  const createOfferForParticipant = async (participantId: string) => {
-    if (!localStream) {
+  const createOfferForParticipant = async (participantId: string, streamToUse?: MediaStream) => {
+    const currentStream = streamToUse || localStream;
+    if (!currentStream) {
       console.error(`❌ [OFFER] No local stream available for ${participantId}`);
       return;
     }
@@ -121,10 +122,10 @@ export const useSupabaseVideoChat = () => {
 
     const pc = createPeerConnection(participantId);
     
-    console.log(`📺 [STREAM] Adding ${localStream.getTracks().length} tracks to peer connection for ${participantId}`);
-    localStream.getTracks().forEach(track => {
+    console.log(`📺 [STREAM] Adding ${currentStream.getTracks().length} tracks to peer connection for ${participantId}`);
+    currentStream.getTracks().forEach(track => {
       console.log(`🎬 [TRACK] Adding track: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState}`);
-      pc.addTrack(track, localStream);
+      pc.addTrack(track, currentStream);
     });
 
     const offer = await pc.createOffer();
@@ -249,9 +250,9 @@ export const useSupabaseVideoChat = () => {
         .on('presence', { event: 'join' }, ({ key, newPresences }) => {
           console.log(`🆕 [PRESENCE] Participant joined: ${key}`, newPresences);
           if (key !== participantIdRef.current) {
-            // Create offer for new participant
+            // Create offer for new participant - pass the stream directly
             console.log(`📤 [OFFER-CREATE] Creating offer for new participant ${key}`);
-            createOfferForParticipant(key);
+            createOfferForParticipant(key, stream);
             
             toast({
               title: "Participant joined",
@@ -296,6 +297,9 @@ export const useSupabaseVideoChat = () => {
       const status = await channel.subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           console.log(`📡 [SUPABASE] Subscribed to room ${targetRoomId}`);
+          
+          // IMPORTANT: Stream should already be available from initializeMedia above
+          console.log(`✅ [STREAM] Using stream with ${stream.getTracks().length} tracks`);
           
           // Track our presence
           const presenceTrackStatus = await channel.track({
