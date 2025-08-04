@@ -191,7 +191,12 @@ export const useSFUConnection = () => {
 
       ws.onopen = () => {
         console.log('📡 [SFU] WebSocket connected, sending join-room message');
-        console.log(`📡 [SFU] Joining room: ${targetRoomId}, participant: ${participantIdRef.current}, name: ${name}`);
+        console.log(`📡 [SFU] EXACT MESSAGE BEING SENT:`, {
+          type: 'join-room',
+          roomId: targetRoomId,
+          participantId: participantIdRef.current,
+          name
+        });
         // Join room
         ws.send(JSON.stringify({
           type: 'join-room',
