@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Mic, MicOff, Video, VideoOff, Phone, PhoneCall, Copy, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useSFUConnection } from '@/hooks/useSFUConnection';
+import { useSupabaseVideoChat } from '@/hooks/useSupabaseVideoChat';
 import { VideoGrid } from './VideoGrid';
 
 interface VideoControlsProps {
@@ -74,10 +74,10 @@ export const VideoChatSFU = () => {
     participants,
     remoteStreams,
     localStream,
-    connectToSFU,
+    connectToRoom,
     disconnect,
     setRoomId
-  } = useSFUConnection();
+  } = useSupabaseVideoChat();
   
   const { toast } = useToast();
 
@@ -122,9 +122,9 @@ export const VideoChatSFU = () => {
     
     console.log(`🎬 [START-UI] Starting call with room ID: ${currentRoomId}, input: ${roomIdInput}`);
     console.log(`🎬 [START-UI] Current state - isConnected: ${isConnected}, roomId: ${roomId}`);
-    console.log(`🎬 [START-UI] About to call connectToSFU with: ${currentRoomId}`);
+    console.log(`🎬 [START-UI] About to call connectToRoom with: ${currentRoomId}`);
 
-    const success = await connectToSFU(currentRoomId, userName || undefined);
+    const success = await connectToRoom(currentRoomId, userName || undefined);
     console.log(`🎬 [START-UI] Connect result: ${success}`);
     if (success) {
       toast({
@@ -154,7 +154,7 @@ export const VideoChatSFU = () => {
     console.log(`🚪 [JOIN] Attempting to join room: ${roomIdInput}`);
     console.log(`🚪 [JOIN] Current state - isConnected: ${isConnected}, roomId: ${roomId}, participants: ${participants.length}`);
 
-    const success = await connectToSFU(roomIdInput, userName || undefined);
+    const success = await connectToRoom(roomIdInput, userName || undefined);
     console.log(`🚪 [JOIN] Connect result: ${success}`);
     if (!success) {
       console.error(`❌ [JOIN] Failed to join room ${roomIdInput}`);
