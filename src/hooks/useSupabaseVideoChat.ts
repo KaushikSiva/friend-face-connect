@@ -145,10 +145,11 @@ export const useSupabaseVideoChat = () => {
     }
   };
 
-  const handleOffer = async (fromParticipantId: string, offer: RTCSessionDescriptionInit) => {
+  const handleOffer = async (fromParticipantId: string, offer: RTCSessionDescriptionInit, streamToUse?: MediaStream) => {
     console.log(`📥 [OFFER] Received offer from ${fromParticipantId}`);
     
-    if (!localStream) {
+    const currentStream = streamToUse || localStream;
+    if (!currentStream) {
       console.error(`❌ [OFFER] No local stream available when handling offer from ${fromParticipantId}`);
       return;
     }
@@ -162,10 +163,10 @@ export const useSupabaseVideoChat = () => {
 
     const pc = createPeerConnection(fromParticipantId);
     
-    console.log(`📺 [OFFER-STREAM] Adding ${localStream.getTracks().length} tracks to peer connection for ${fromParticipantId}`);
-    localStream.getTracks().forEach(track => {
+    console.log(`📺 [OFFER-STREAM] Adding ${currentStream.getTracks().length} tracks to peer connection for ${fromParticipantId}`);
+    currentStream.getTracks().forEach(track => {
       console.log(`🎬 [OFFER-TRACK] Adding track: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState}`);
-      pc.addTrack(track, localStream);
+      pc.addTrack(track, currentStream);
     });
 
     await pc.setRemoteDescription(offer);
@@ -250,9 +251,13 @@ export const useSupabaseVideoChat = () => {
         .on('presence', { event: 'join' }, ({ key, newPresences }) => {
           console.log(`🆕 [PRESENCE] Participant joined: ${key}`, newPresences);
           if (key !== participantIdRef.current) {
-            // Create offer for new participant - pass the stream directly
-            console.log(`📤 [OFFER-CREATE] Creating offer for new participant ${key}`);
-            createOfferForParticipant(key, stream);
+            // Only the participant with the lower ID creates the offer to prevent simultaneous offers
+            if (participantIdRef.current < key) {
+              console.log(`📤 [OFFER-CREATE] Creating offer for new participant ${key} (I have lower ID)`);
+              createOfferForParticipant(key, stream);
+            } else {
+              console.log(`⏳ [WAIT] Waiting for offer from ${key} (they have lower ID)`);
+            }
             
             toast({
               title: "Participant joined",
@@ -279,7 +284,7 @@ export const useSupabaseVideoChat = () => {
         })
         .on('broadcast', { event: 'offer' }, ({ payload }) => {
           if (payload.targetParticipantId === participantIdRef.current) {
-            handleOffer(payload.fromParticipantId, payload.offer);
+            handleOffer(payload.fromParticipantId, payload.offer, stream);
           }
         })
         .on('broadcast', { event: 'answer' }, ({ payload }) => {
