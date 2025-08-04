@@ -103,23 +103,35 @@ export const useSFUConnection = () => {
   const createOfferForParticipant = async (participantId: string, stream?: MediaStream) => {
     const currentStream = stream || localStream;
     console.log(`🔗 [OFFER] Creating offer for participant ${participantId}, stream available: ${!!currentStream}`);
-    const pc = createPeerConnection(participantId);
     
-    // Add local stream to peer connection
-    if (currentStream) {
-      console.log(`📺 [STREAM] Adding ${currentStream.getTracks().length} tracks to peer connection`);
-      currentStream.getTracks().forEach(track => {
-        console.log(`🎬 [TRACK] Adding track: ${track.kind}, enabled: ${track.enabled}`);
-        pc.addTrack(track, currentStream);
-      });
-    } else {
-      console.warn(`⚠️ [STREAM] No stream available when creating offer for ${participantId}`);
+    if (!currentStream) {
+      console.error(`❌ [OFFER] No stream available for ${participantId}`);
+      return;
     }
     
+    // Check if peer connection already exists and close it
+    const existingPc = peerConnectionsRef.current.get(participantId);
+    if (existingPc) {
+      console.log(`🗑️ [OFFER] Closing existing connection for ${participantId}`);
+      existingPc.close();
+      peerConnectionsRef.current.delete(participantId);
+    }
+    
+    const pc = createPeerConnection(participantId);
+    
+    // Add local stream to peer connection FIRST
+    console.log(`📺 [STREAM] Adding ${currentStream.getTracks().length} tracks to peer connection for ${participantId}`);
+    currentStream.getTracks().forEach(track => {
+      console.log(`🎬 [TRACK] Adding track: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState}`);
+      const sender = pc.addTrack(track, currentStream);
+      console.log(`✅ [TRACK] Track added to peer connection, sender:`, sender);
+    });
+    
     // Create and send offer
+    console.log(`📤 [OFFER] Creating offer for ${participantId}`);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    console.log(`📤 [OFFER] Sending offer to ${participantId}`);
+    console.log(`📤 [OFFER] Sending offer to ${participantId}`, offer);
     
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
@@ -127,6 +139,8 @@ export const useSFUConnection = () => {
         targetParticipantId: participantId,
         offer
       }));
+    } else {
+      console.error(`❌ [OFFER] WebSocket not ready when sending offer to ${participantId}`);
     }
   };
 
@@ -300,21 +314,34 @@ export const useSFUConnection = () => {
   const handleOffer = async (fromParticipantId: string, offer: RTCSessionDescriptionInit, stream?: MediaStream) => {
     console.log(`📥 [OFFER] Received offer from ${fromParticipantId}`);
     
+    // Check if peer connection already exists and close it
+    const existingPc = peerConnectionsRef.current.get(fromParticipantId);
+    if (existingPc) {
+      console.log(`🗑️ [OFFER] Closing existing connection for ${fromParticipantId}`);
+      existingPc.close();
+      peerConnectionsRef.current.delete(fromParticipantId);
+    }
+    
     const pc = createPeerConnection(fromParticipantId);
     const currentStream = stream || localStream;
     
     // Add local stream to peer connection
     if (currentStream) {
-      console.log(`📺 [OFFER-STREAM] Adding ${currentStream.getTracks().length} tracks to peer connection`);
+      console.log(`📺 [OFFER-STREAM] Adding ${currentStream.getTracks().length} tracks to peer connection for ${fromParticipantId}`);
       currentStream.getTracks().forEach(track => {
-        pc.addTrack(track, currentStream);
+        console.log(`🎬 [OFFER-TRACK] Adding track: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState}`);
+        const sender = pc.addTrack(track, currentStream);
+        console.log(`✅ [OFFER-TRACK] Track added, sender:`, sender);
       });
+    } else {
+      console.error(`❌ [OFFER] No stream available when handling offer from ${fromParticipantId}`);
     }
     
     await pc.setRemoteDescription(offer);
     
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
+    console.log(`📤 [ANSWER] Sending answer to ${fromParticipantId}`, answer);
     
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
@@ -322,6 +349,8 @@ export const useSFUConnection = () => {
         targetParticipantId: fromParticipantId,
         answer
       }));
+    } else {
+      console.error(`❌ [ANSWER] WebSocket not ready when sending answer to ${fromParticipantId}`);
     }
   };
 
