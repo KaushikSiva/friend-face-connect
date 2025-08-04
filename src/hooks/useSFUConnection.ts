@@ -342,7 +342,7 @@ export const useSFUConnection = () => {
     setIsConnected(false);
     setParticipants([]);
     setRemoteStreams([]);
-    setRoomId('');
+    // Don't reset room ID - keep it for rejoining
     
     toast({
       title: "Disconnected",
