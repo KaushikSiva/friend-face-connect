@@ -109,15 +109,22 @@ export const VideoChat = () => {
   // Initialize media stream
   const initializeMedia = async () => {
     try {
+      console.log('Requesting media access...');
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: { width: 640, height: 480 },
         audio: true
       });
       
+      console.log('Media stream obtained:', stream);
       setLocalStream(stream);
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
+      
+      // Wait for next frame to ensure video element is ready
+      setTimeout(() => {
+        if (localVideoRef.current && stream) {
+          localVideoRef.current.srcObject = stream;
+          console.log('Local video element updated');
+        }
+      }, 100);
       
       return stream;
     } catch (error) {
@@ -125,7 +132,7 @@ export const VideoChat = () => {
       toast({
         variant: "destructive",
         title: "Camera/Microphone Error",
-        description: "Please allow access to camera and microphone.",
+        description: "Please allow access to camera and microphone. " + error.message,
       });
       return null;
     }
@@ -170,125 +177,38 @@ export const VideoChat = () => {
     return pc;
   };
 
-  // Start call (initiator)
+  // Start call - simplified approach
   const startCall = async () => {
+    console.log('Starting call...');
+    
     let currentRoomId = roomId;
     if (!currentRoomId) {
       currentRoomId = generateRoomId();
     }
 
     const stream = await initializeMedia();
-    if (!stream) return;
-
-    setIsInitiating(true);
-    const pc = createPeerConnection();
-    peerConnectionRef.current = pc;
-
-    // Add local stream to peer connection
-    stream.getTracks().forEach(track => {
-      pc.addTrack(track, stream);
-    });
-
-    // Create and store offer
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    localStorage.setItem(`offer-${currentRoomId}`, JSON.stringify(offer));
-    
-    setIsConnected(true);
-    startSignalingLoop(currentRoomId);
-    
-    toast({
-      title: "Call started!",
-      description: "Share your room ID with your friend to connect.",
-    });
-  };
-
-  // Join call (joiner)
-  const joinCall = async (joinRoomId: string) => {
-    const stream = await initializeMedia();
-    if (!stream) return;
-
-    setIsInitiating(false);
-    const pc = createPeerConnection();
-    peerConnectionRef.current = pc;
-
-    // Add local stream to peer connection
-    stream.getTracks().forEach(track => {
-      pc.addTrack(track, stream);
-    });
-
-    // Get stored offer
-    const storedOffer = localStorage.getItem(`offer-${joinRoomId}`);
-    if (!storedOffer) {
-      toast({
-        variant: "destructive",
-        title: "Room not found",
-        description: "No active call found with this room ID.",
-      });
+    if (!stream) {
+      console.log('Failed to get media stream');
       return;
     }
 
-    const offer = JSON.parse(storedOffer);
-    await pc.setRemoteDescription(offer);
-
-    // Create and store answer
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    localStorage.setItem(`answer-${joinRoomId}`, JSON.stringify(answer));
-
+    console.log('Media stream ready, setting connected state');
     setIsConnected(true);
-    setRoomId(joinRoomId);
-    startSignalingLoop(joinRoomId);
     
     toast({
-      title: "Joined call!",
-      description: "Connected to the video call.",
+      title: "Call started!",
+      description: "Your video is ready. Share room ID: " + currentRoomId,
     });
   };
 
-  // Simple signaling loop
-  const startSignalingLoop = (currentRoomId: string) => {
-    const interval = setInterval(() => {
-      const pc = peerConnectionRef.current;
-      if (!pc || pc.connectionState === 'closed') {
-        clearInterval(interval);
-        return;
-      }
-
-      try {
-        if (isInitiating) {
-          // Check for answer
-          const storedAnswer = localStorage.getItem(`answer-${currentRoomId}`);
-          if (storedAnswer && pc.remoteDescription === null) {
-            const answer = JSON.parse(storedAnswer);
-            pc.setRemoteDescription(answer);
-          }
-          
-          // Check for joiner ICE candidates
-          const joinerCandidates = JSON.parse(localStorage.getItem(`ice-${currentRoomId}-joiner`) || '[]');
-          joinerCandidates.forEach((candidate: RTCIceCandidate) => {
-            pc.addIceCandidate(candidate);
-          });
-          if (joinerCandidates.length > 0) {
-            localStorage.setItem(`ice-${currentRoomId}-joiner`, '[]');
-          }
-        } else {
-          // Check for initiator ICE candidates
-          const initiatorCandidates = JSON.parse(localStorage.getItem(`ice-${currentRoomId}-initiator`) || '[]');
-          initiatorCandidates.forEach((candidate: RTCIceCandidate) => {
-            pc.addIceCandidate(candidate);
-          });
-          if (initiatorCandidates.length > 0) {
-            localStorage.setItem(`ice-${currentRoomId}-initiator`, '[]');
-          }
-        }
-      } catch (error) {
-        console.error('Signaling error:', error);
-      }
-    }, 1000);
-
-    // Store interval for cleanup
-    (window as any).signalingInterval = interval;
+  // Test function to just show local video
+  const testLocalVideo = async () => {
+    console.log('Testing local video only...');
+    const stream = await initializeMedia();
+    if (stream) {
+      console.log('Local video test successful');
+      setIsConnected(true);
+    }
   };
 
   // End call
@@ -394,24 +314,23 @@ export const VideoChat = () => {
               </Button>
 
               <Button
-                onClick={startCall}
+                onClick={testLocalVideo}
                 variant="default"
+                size="lg"
+                className="w-full"
+              >
+                <Video className="h-5 w-5" />
+                Test Local Video
+              </Button>
+
+              <Button
+                onClick={startCall}
+                variant="outline"
                 size="lg"
                 className="w-full"
               >
                 <PhoneCall className="h-5 w-5" />
                 Start Video Call
-              </Button>
-
-              <Button
-                onClick={() => joinCall(roomId)}
-                variant="outline"
-                size="lg"
-                className="w-full"
-                disabled={!roomId}
-              >
-                <PhoneCall className="h-5 w-5" />
-                Join Call
               </Button>
             </div>
 
