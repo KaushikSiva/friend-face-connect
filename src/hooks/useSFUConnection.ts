@@ -79,8 +79,7 @@ export const useSFUConnection = () => {
           );
         }
         
-        const participant = participants.find(p => p.id === participantId);
-        return [...prev, { participantId, stream, name: participant?.name }];
+        return [...prev, { participantId, stream, name: undefined }];
       });
     };
 
@@ -88,15 +87,31 @@ export const useSFUConnection = () => {
       console.log(`🔗 [PC] ICE connection state for ${participantId}: ${pc.iceConnectionState}`);
     };
 
+    peerConnectionsRef.current.set(participantId, pc);
+    return pc;
+  };
+
+  const createOfferForParticipant = async (participantId: string) => {
+    const pc = createPeerConnection(participantId);
+    
     // Add local stream to peer connection
     if (localStream) {
       localStream.getTracks().forEach(track => {
         pc.addTrack(track, localStream);
       });
     }
-
-    peerConnectionsRef.current.set(participantId, pc);
-    return pc;
+    
+    // Create and send offer
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'offer',
+        targetParticipantId: participantId,
+        offer
+      }));
+    }
   };
 
   const connectToSFU = useCallback(async (targetRoomId: string, name?: string) => {
@@ -165,23 +180,14 @@ export const useSFUConnection = () => {
         setParticipants(message.participants);
         // Create peer connections for existing participants
         for (const participant of message.participants) {
-          const pc = createPeerConnection(participant.id);
-          // Create and send offer
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({
-              type: 'offer',
-              targetParticipantId: participant.id,
-              offer
-            }));
-          }
+          await createOfferForParticipant(participant.id);
         }
         break;
 
       case 'participant-joined':
         setParticipants(prev => [...prev, { id: message.participantId, name: message.name }]);
+        // Create offer for new participant
+        await createOfferForParticipant(message.participantId);
         toast({
           title: "Participant joined",
           description: message.name || `User ${message.participantId.slice(0, 4)} joined the call`,
@@ -232,6 +238,14 @@ export const useSFUConnection = () => {
     console.log(`📥 [OFFER] Received offer from ${fromParticipantId}`);
     
     const pc = createPeerConnection(fromParticipantId);
+    
+    // Add local stream to peer connection
+    if (localStream) {
+      localStream.getTracks().forEach(track => {
+        pc.addTrack(track, localStream);
+      });
+    }
+    
     await pc.setRemoteDescription(offer);
     
     const answer = await pc.createAnswer();
