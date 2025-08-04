@@ -27,6 +27,19 @@ export const useSupabaseVideoChat = () => {
   
   const { toast } = useToast();
 
+  // Update remote stream names when participants change
+  useEffect(() => {
+    setRemoteStreams(prevStreams => 
+      prevStreams.map(stream => {
+        const participant = participants.find(p => p.id === stream.participantId);
+        return {
+          ...stream,
+          name: participant?.name || stream.name
+        };
+      })
+    );
+  }, [participants]);
+
   const initializeMedia = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -95,6 +108,21 @@ export const useSupabaseVideoChat = () => {
         
         console.log(`➕ [TRACK] Adding new stream for ${participantId}`);
         return [...prev, { participantId, stream, name: undefined }];
+      });
+      
+      // Update stream names from participants
+      setParticipants(currentParticipants => {
+        const participant = currentParticipants.find(p => p.id === participantId);
+        if (participant?.name) {
+          setRemoteStreams(currentStreams => 
+            currentStreams.map(s => 
+              s.participantId === participantId 
+                ? { ...s, name: participant.name }
+                : s
+            )
+          );
+        }
+        return currentParticipants;
       });
     };
 
