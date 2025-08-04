@@ -131,6 +131,30 @@ export const useSFUConnection = () => {
   };
 
   const connectToSFU = useCallback(async (targetRoomId: string, name?: string) => {
+    console.log(`🚀 [SFU] === Starting connection to room: ${targetRoomId} ===`);
+    console.log(`🚀 [SFU] Current connection state - isConnected: ${isConnected}, existing roomId: ${roomId}`);
+    
+    // If already connected to a different room, clean up first
+    if (isConnected && roomId !== targetRoomId) {
+      console.log(`🔄 [SFU] Already connected to ${roomId}, cleaning up to join ${targetRoomId}`);
+      
+      // Clean up existing connections
+      peerConnectionsRef.current.forEach(pc => pc.close());
+      peerConnectionsRef.current.clear();
+      
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      
+      setIsConnected(false);
+      setParticipants([]);
+      setRemoteStreams([]);
+      
+      // Wait for cleanup
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
     try {
       console.log(`🚀 [SFU] Connecting to room: ${targetRoomId} with name: ${name}`);
       
@@ -270,7 +294,7 @@ export const useSFUConnection = () => {
       });
       return false;
     }
-  }, [toast]);
+  }, [toast, isConnected, roomId, localStream]);
 
 
   const handleOffer = async (fromParticipantId: string, offer: RTCSessionDescriptionInit, stream?: MediaStream) => {

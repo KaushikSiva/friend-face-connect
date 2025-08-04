@@ -115,9 +115,11 @@ export const VideoChatSFU = () => {
     if (!currentRoomId) {
       currentRoomId = generateRoomId();
     }
-    console.log(`🎬 [START] Starting call with room ID: ${currentRoomId}`);
+    console.log(`🎬 [START] Starting call with room ID: ${currentRoomId}, input: ${roomIdInput}`);
+    console.log(`🎬 [START] Current state - isConnected: ${isConnected}, roomId: ${roomId}`);
 
     const success = await connectToSFU(currentRoomId, userName || undefined);
+    console.log(`🎬 [START] Connect result: ${success}`);
     if (success) {
       toast({
         title: "Call started!",
@@ -139,8 +141,10 @@ export const VideoChatSFU = () => {
       return;
     }
     console.log(`🚪 [JOIN] Attempting to join room: ${roomIdInput}`);
+    console.log(`🚪 [JOIN] Current state - isConnected: ${isConnected}, roomId: ${roomId}, participants: ${participants.length}`);
 
     const success = await connectToSFU(roomIdInput, userName || undefined);
+    console.log(`🚪 [JOIN] Connect result: ${success}`);
     if (!success) {
       console.error(`❌ [JOIN] Failed to join room ${roomIdInput}`);
       toast({
