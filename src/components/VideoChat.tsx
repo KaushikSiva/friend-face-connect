@@ -76,10 +76,13 @@ export const VideoChat = () => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isInitiating, setIsInitiating] = useState(false);
+  const [connectionState, setConnectionState] = useState<string>('new');
+  const [iceCandidatesReceived, setIceCandidatesReceived] = useState(0);
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const subscriptionRef = useRef<any>(null);
   
   const { toast } = useToast();
 
@@ -208,6 +211,7 @@ export const VideoChat = () => {
 
   // Create peer connection with proper signaling
   const createPeerConnection = () => {
+    console.log('Creating new peer connection...');
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -216,17 +220,30 @@ export const VideoChat = () => {
     });
 
     pc.onicecandidate = (event) => {
+      console.log('ICE candidate generated:', event.candidate);
       if (event.candidate) {
         storeSignalingData(roomId, 'ice_candidate', event.candidate);
+      } else {
+        console.log('ICE gathering complete');
       }
     };
 
     pc.ontrack = (event) => {
-      console.log('Received remote stream');
-      setRemoteStream(event.streams[0]);
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0];
-      }
+      console.log('Remote track received:', event.streams);
+      const stream = event.streams[0];
+      setRemoteStream(stream);
+      
+      setTimeout(() => {
+        if (remoteVideoRef.current && stream) {
+          remoteVideoRef.current.srcObject = stream;
+          console.log('Remote video element updated');
+        }
+      }, 100);
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('ICE connection state:', pc.iceConnectionState);
+      setConnectionState(pc.iceConnectionState);
     };
 
     pc.onconnectionstatechange = () => {
@@ -235,6 +252,12 @@ export const VideoChat = () => {
         toast({
           title: "Connected!",
           description: "Video call is now active.",
+        });
+      } else if (pc.connectionState === 'failed') {
+        toast({
+          variant: "destructive",
+          title: "Connection failed",
+          description: "Unable to establish connection.",
         });
       }
     };
@@ -282,8 +305,10 @@ export const VideoChat = () => {
       } else if (type === 'ice_candidate' && peerConnectionRef.current) {
         await peerConnectionRef.current.addIceCandidate(data as unknown as RTCIceCandidateInit);
         console.log('ICE candidate received via real-time');
+        setIceCandidatesReceived(prev => prev + 1);
       }
     });
+    subscriptionRef.current = subscription;
     
     toast({
       title: "Call started!",
@@ -344,8 +369,10 @@ export const VideoChat = () => {
       if (type === 'ice_candidate' && peerConnectionRef.current) {
         await peerConnectionRef.current.addIceCandidate(data as unknown as RTCIceCandidateInit);
         console.log('ICE candidate received via real-time');
+        setIceCandidatesReceived(prev => prev + 1);
       }
     });
+    subscriptionRef.current = subscription;
 
     toast({
       title: "Joined call!",
@@ -390,7 +417,13 @@ export const VideoChat = () => {
 
   // End call
   const endCall = () => {
-    // Clear signaling interval
+    // Unsubscribe from real-time updates
+    if (subscriptionRef.current) {
+      supabase.removeChannel(subscriptionRef.current);
+      subscriptionRef.current = null;
+    }
+    
+    // Clear signaling interval (if still using)
     if ((window as any).signalingInterval) {
       clearInterval((window as any).signalingInterval);
     }
@@ -405,17 +438,11 @@ export const VideoChat = () => {
       setLocalStream(null);
     }
     
-    // Clear signaling data
-    if (roomId) {
-      localStorage.removeItem(`offer-${roomId}`);
-      localStorage.removeItem(`answer-${roomId}`);
-      localStorage.removeItem(`ice-${roomId}-initiator`);
-      localStorage.removeItem(`ice-${roomId}-joiner`);
-    }
-    
     setRemoteStream(null);
     setIsConnected(false);
     setIsInitiating(false);
+    setConnectionState('new');
+    setIceCandidatesReceived(0);
     
     toast({
       title: "Call ended",
