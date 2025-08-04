@@ -115,6 +115,7 @@ export const VideoChatSFU = () => {
     if (!currentRoomId) {
       currentRoomId = generateRoomId();
     }
+    console.log(`🎬 [START] Starting call with room ID: ${currentRoomId}`);
 
     const success = await connectToSFU(currentRoomId, userName || undefined);
     if (success) {
@@ -122,6 +123,8 @@ export const VideoChatSFU = () => {
         title: "Call started!",
         description: `Room ID: ${currentRoomId}. Share with others to join.`,
       });
+    } else {
+      console.error(`❌ [START] Failed to start call`);
     }
   };
 
@@ -135,9 +138,11 @@ export const VideoChatSFU = () => {
       });
       return;
     }
+    console.log(`🚪 [JOIN] Attempting to join room: ${roomIdInput}`);
 
     const success = await connectToSFU(roomIdInput, userName || undefined);
     if (!success) {
+      console.error(`❌ [JOIN] Failed to join room ${roomIdInput}`);
       toast({
         variant: "destructive",
         title: "Failed to join",

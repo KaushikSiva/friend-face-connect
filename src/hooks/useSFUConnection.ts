@@ -123,21 +123,27 @@ export const useSFUConnection = () => {
 
   const connectToSFU = useCallback(async (targetRoomId: string, name?: string) => {
     try {
-      console.log(`🚀 [SFU] Connecting to room: ${targetRoomId}`);
+      console.log(`🚀 [SFU] Connecting to room: ${targetRoomId} with name: ${name}`);
       
       // Initialize media first
+      console.log(`📷 [MEDIA] Initializing media devices...`);
       const stream = await initializeMedia();
-      if (!stream) return false;
+      if (!stream) {
+        console.error(`❌ [MEDIA] Failed to initialize media`);
+        return false;
+      }
+      console.log(`✅ [MEDIA] Media initialized with ${stream.getTracks().length} tracks`);
 
       // Store current stream reference for use in message handlers
       const currentStreamRef = { current: stream };
 
       // Connect to SFU WebSocket
+      console.log(`🔌 [WS] Connecting to WebSocket...`);
       const ws = new WebSocket(`wss://pbxormchfloeaqrkhbvz.functions.supabase.co/video-sfu`);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('📡 [SFU] WebSocket connected');
+        console.log('📡 [SFU] WebSocket connected, sending join-room message');
         // Join room
         ws.send(JSON.stringify({
           type: 'join-room',
@@ -145,6 +151,7 @@ export const useSFUConnection = () => {
           participantId: participantIdRef.current,
           name
         }));
+        console.log(`📤 [JOIN] Sent join-room message for room ${targetRoomId}, participant ${participantIdRef.current}`);
       };
 
       ws.onmessage = async (event) => {
