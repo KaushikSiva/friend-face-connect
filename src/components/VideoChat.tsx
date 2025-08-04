@@ -95,6 +95,7 @@ export const VideoChat = () => {
 
   // Supabase signaling functions
   const storeSignalingData = async (roomId: string, type: string, data: any) => {
+    console.log(`🔄 [STORE] Attempting to store ${type} for room ${roomId}`, data);
     try {
       const { error } = await supabase
         .from('signaling')
@@ -105,12 +106,12 @@ export const VideoChat = () => {
         });
       
       if (error) {
-        console.error('Error storing signaling data:', error);
+        console.error('❌ [STORE] Error storing signaling data:', error);
       } else {
-        console.log('Stored signaling data:', type, 'for room:', roomId);
+        console.log(`✅ [STORE] Successfully stored ${type} for room ${roomId}`);
       }
     } catch (error) {
-      console.error('Failed to store signaling data:', error);
+      console.error('💥 [STORE] Failed to store signaling data:', error);
     }
   };
 
@@ -160,7 +161,7 @@ export const VideoChat = () => {
 
   // Subscribe to signaling changes
   const subscribeToSignaling = (roomId: string, callback: (type: string, data: any) => void) => {
-    console.log('Setting up real-time subscription for room:', roomId);
+    console.log(`📡 [SUB] Setting up real-time subscription for room: ${roomId}`);
     const subscription = supabase
       .channel(`signaling-${roomId}`)
       .on('postgres_changes', 
@@ -171,12 +172,12 @@ export const VideoChat = () => {
           filter: `room_id=eq.${roomId}`
         }, 
         (payload) => {
-          console.log('Received real-time signaling data:', payload.new);
+          console.log(`📨 [SUB] Received real-time signaling data:`, payload.new);
           callback(payload.new.type, payload.new.data);
         }
       )
       .subscribe((status) => {
-        console.log('Subscription status:', status);
+        console.log(`📡 [SUB] Subscription status for room ${roomId}:`, status);
       });
     
     return subscription;
@@ -242,40 +243,43 @@ export const VideoChat = () => {
     });
 
     pc.onicecandidate = (event) => {
-      console.log('ICE candidate generated:', event.candidate);
+      console.log('🧊 [ICE] ICE candidate generated:', event.candidate);
       if (event.candidate) {
+        console.log(`🧊 [ICE] Storing ICE candidate for room ${roomId}`);
         storeSignalingData(roomId, 'ice_candidate', event.candidate);
       } else {
-        console.log('ICE gathering complete');
+        console.log('🧊 [ICE] ICE gathering complete');
       }
     };
 
     pc.ontrack = (event) => {
-      console.log('Remote track received:', event.streams);
+      console.log('🎥 [TRACK] Remote track received:', event.streams);
       const stream = event.streams[0];
       setRemoteStream(stream);
       
       setTimeout(() => {
         if (remoteVideoRef.current && stream) {
           remoteVideoRef.current.srcObject = stream;
-          console.log('Remote video element updated');
+          console.log('🎥 [TRACK] Remote video element updated successfully');
         }
       }, 100);
     };
 
     pc.oniceconnectionstatechange = () => {
-      console.log('ICE connection state:', pc.iceConnectionState);
+      console.log(`🔗 [CONNECTION] ICE connection state: ${pc.iceConnectionState}`);
       setConnectionState(pc.iceConnectionState);
     };
 
     pc.onconnectionstatechange = () => {
-      console.log('Connection state:', pc.connectionState);
+      console.log(`🔗 [CONNECTION] Peer connection state: ${pc.connectionState}`);
       if (pc.connectionState === 'connected') {
+        console.log('🎉 [CONNECTION] WebRTC connection successfully established!');
         toast({
           title: "Connected!",
           description: "Video call is now active.",
         });
       } else if (pc.connectionState === 'failed') {
+        console.error('💥 [CONNECTION] WebRTC connection failed!');
         toast({
           variant: "destructive",
           title: "Connection failed",
@@ -289,15 +293,21 @@ export const VideoChat = () => {
 
   // Start call as initiator
   const startCall = async () => {
-    console.log('Starting call as initiator...');
+    console.log('🚀 [START] Starting call as initiator...');
     
     let currentRoomId = roomId;
     if (!currentRoomId) {
       currentRoomId = generateRoomId();
+      console.log(`🆔 [START] Generated new room ID: ${currentRoomId}`);
     }
 
+    console.log('📹 [START] Requesting media access...');
     const stream = await initializeMedia();
-    if (!stream) return;
+    if (!stream) {
+      console.error('❌ [START] Failed to get media stream');
+      return;
+    }
+    console.log('✅ [START] Media stream obtained successfully');
 
     setIsInitiating(true);
     setIsConnected(true);
